@@ -2,6 +2,8 @@ using Application.Activities;
 using Application.Core;
 using Microsoft.EntityFrameworkCore;
 using Persistence;
+using MediatR;
+using AutoMapper;
 
 namespace API.Extensions
 {
