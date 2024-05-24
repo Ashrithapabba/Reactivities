@@ -13,6 +13,6 @@ namespace Application.Activities
           public string Venue { get; set; }
           public string HostUsername { get; set; }
           public bool IsCancelled { get; set; }
-          public ICollection<Profile> Attendess { get; set; }
+          public ICollection<AttendeeDto> Attendess { get; set; }
     }
 }
