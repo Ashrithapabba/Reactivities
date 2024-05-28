@@ -1,10 +1,10 @@
-import { makeAutoObservable, runInAction } from "mobx";
+import { makeAutoObservable, reaction, runInAction, values } from "mobx";
 import { Activity, ActivityFormValues } from "../models/activity";
 import agent from "../api/agent";
-import {v4 as uuid} from 'uuid';
 import { format } from "date-fns";
 import { store } from "./store";
 import { Profile } from "../models/profile";
+import { Pagination, PagingParams } from "../models/pagination";
 
 export default class ActivityStore {
     activityRegistry = new Map<string, Activity>();
@@ -12,10 +12,67 @@ export default class ActivityStore {
     editMode = false;
     loading = false;
     loadingInitial = false;
+    pagination: Pagination | null = null;
+    pagingParams = new PagingParams();
+    predicate = new Map().set('all' , true);
 
     constructor() {
         makeAutoObservable(this)
+
+        reaction(
+            () => this.predicate.keys(),
+            () => {
+                this.pagingParams = new PagingParams();
+                this.activityRegistry.clear();
+                this.loadActivities();
+            }
+        )
         }
+
+        setPagingParams = (pagingparams: PagingParams) => {
+            this.pagingParams = pagingparams;
+        }
+
+        setPredicate = (predicate: string, value: string | Date) => {
+            const resetPredicate = () => {
+                this.predicate.forEach((value, key) => {
+                    if (key !== 'startDate') this.predicate.delete(key);
+                })
+            }
+            switch (predicate) {
+                case 'all':
+                    resetPredicate();
+                    this.predicate.set('all', true);
+                    break;
+                case 'isGoing':
+                    resetPredicate();
+                    this.predicate.set('isGoing', true);
+                    break;
+                case 'isHost':
+                    resetPredicate();
+                    this.predicate.set('isHost', true);
+                    break;
+                case 'startDate':
+                    resetPredicate();
+                    this.predicate.delete('startDate');
+                    this.predicate.set('startDate', value);
+            }
+        }
+
+        get axiosParams() {
+            const Params = new URLSearchParams();
+            Params.append('pageNumber', this.pagingParams.pageNumber.toString());
+            Params.append('pageSize', this.pagingParams.pageSize.toString());
+            this.predicate.forEach((value, key) => {
+                if (key === 'startDate') {
+                    Params.append(key, (value as Date).toISOString())
+                } else {
+                    Params.append(key, value);
+                }
+            })
+            return Params;
+        }
+
         get activitiesByDate() {
             return Array.from(this.activityRegistry.values())
             .sort((a, b) => a.date!.getTime() - b.date!.getTime());
@@ -35,16 +92,21 @@ export default class ActivityStore {
         loadActivities = async () => {
             this.setLoadingInitial(true);
             try {
-                const activities = await agent.Activities.list();
-                    activities.forEach(activity => {
+                const result = await agent.Activities.list(this.axiosParams);
+                    result.data.forEach(activity => {
                         this.setActivity(activity);
                       })
+                      this.setPagination(result.pagination);
                       this.setLoadingInitial(false);
             } catch (error) {
                 console.log(error);
                 this.setLoadingInitial(false);
             }
         } 
+
+        setPagination = (pagination: Pagination) => {
+            this.pagination = pagination;
+        }
 
         loadActivity =async (id: string) => {
             let activity = this.getActivity(id);
